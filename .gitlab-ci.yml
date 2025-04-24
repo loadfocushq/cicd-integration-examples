@@ -1,0 +1,53 @@
+image: node:16
+
+stages:
+  - build
+  - test
+  - performance
+  - deploy
+
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - node_modules/
+
+build:
+  stage: build
+  script:
+    - npm install
+  artifacts:
+    paths:
+      - node_modules/
+
+test:
+  stage: test
+  script:
+    - npm test
+  dependencies:
+    - build
+
+performance:
+  stage: performance
+  script:
+    # Install LoadFocus API Client
+    - npm install -g @loadfocus/loadfocus-api-client
+    
+    # Configure LoadFocus API Client
+    - loadfocus-api config set --apikey $LOADFOCUS_API_KEY --teamid $LOADFOCUS_TEAM_ID
+    
+    # Run Performance Tests
+    - loadfocus-api jmeter run-test --name "MyTestName" --thresholds "avgResponseTime<=500,errorRate<=1,p95<=750"
+  dependencies:
+    - build
+
+deploy:
+  stage: deploy
+  script:
+    - echo "Deploying application..."
+  environment:
+    name: production
+  when: manual
+  dependencies:
+    - build
+    - test
+    - performance

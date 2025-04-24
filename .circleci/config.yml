@@ -1,0 +1,67 @@
+version: 2.1
+
+jobs:
+  build-and-test:
+    docker:
+      - image: cimg/node:16.20
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - v1-dependencies-{{ checksum "package.json" }}
+            - v1-dependencies-
+      - run:
+          name: Install Dependencies
+          command: npm install
+      - save_cache:
+          paths:
+            - node_modules
+          key: v1-dependencies-{{ checksum "package.json" }}
+      - run:
+          name: Run Tests
+          command: npm test
+
+  performance-test:
+    docker:
+      - image: cimg/node:16.20
+    steps:
+      - checkout
+      - run:
+          name: Install LoadFocus API Client
+          command: npm install -g @loadfocus/loadfocus-api-client
+      - run:
+          name: Configure LoadFocus API Client
+          command: loadfocus-api config set --apikey ${LOADFOCUS_API_KEY} --teamid ${LOADFOCUS_TEAM_ID}
+      - run:
+          name: Run Performance Tests
+          command: |
+            loadfocus-api jmeter run-test \
+              --name "Apr_2_2025_11_32_PM" \
+              --thresholds "avgResponseTime<=500,errorRate<=1,p95<=750"
+
+  deploy:
+    docker:
+      - image: cimg/node:16.20
+    steps:
+      - checkout
+      - run:
+          name: Deploy Application
+          command: echo "Deploying application..."
+
+workflows:
+  version: 2
+  build-test-deploy:
+    jobs:
+      - build-and-test
+      - performance-test:
+          requires:
+            - build-and-test
+          context:
+            - loadfocus-context
+      - hold:
+          type: approval
+          requires:
+            - performance-test
+      - deploy:
+          requires:
+            - hold

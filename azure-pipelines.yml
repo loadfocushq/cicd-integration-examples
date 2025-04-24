@@ -1,0 +1,67 @@
+trigger:
+  - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+- stage: BuildAndTest
+  displayName: 'Build and Test'
+  jobs:
+  - job: BuildAndTest
+    displayName: 'Build and Test'
+    steps:
+    - task: NodeTool@0
+      inputs:
+        versionSpec: '16.x'
+      displayName: 'Install Node.js'
+    
+    - script: |
+        npm install
+      displayName: 'Install Dependencies'
+    
+    - script: |
+        npm test
+      displayName: 'Run Tests'
+
+- stage: PerformanceTest
+  displayName: 'Performance Test'
+  dependsOn: BuildAndTest
+  jobs:
+  - job: PerformanceTest
+    displayName: 'Performance Test with LoadFocus'
+    steps:
+    - task: NodeTool@0
+      inputs:
+        versionSpec: '16.x'
+      displayName: 'Install Node.js'
+    
+    - script: |
+        npm install -g @loadfocus/loadfocus-api-client
+      displayName: 'Install LoadFocus API Client'
+    
+    - script: |
+        loadfocus-api config set --apikey $(LOADFOCUS_API_KEY) --teamid $(LOADFOCUS_TEAM_ID)
+      displayName: 'Configure LoadFocus API Client'
+    
+    - script: |
+        loadfocus-api jmeter run-test \
+          --name "MyTestName" \
+          --thresholds "avgResponseTime<=500,errorRate<=1,p95<=750"
+      displayName: 'Run Performance Tests'
+
+- stage: Deploy
+  displayName: 'Deploy'
+  dependsOn: PerformanceTest
+  condition: succeeded()
+  jobs:
+  - deployment: DeployApp
+    displayName: 'Deploy Application'
+    environment: 'production'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - script: |
+              echo "Deploying application..."
+            displayName: 'Deploy Application'

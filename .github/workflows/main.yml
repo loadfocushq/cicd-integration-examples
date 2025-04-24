@@ -1,0 +1,64 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '16'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm install
+    
+    - name: Run tests
+      run: npm test
+
+  performance-test:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '16'
+        cache: 'npm'
+    
+    - name: Install LoadFocus API Client
+      run: npm install -g @loadfocus/loadfocus-api-client
+    
+    - name: Configure LoadFocus API Client
+      run: loadfocus-api config set --apikey ${{ secrets.LOADFOCUS_API_KEY }} --teamid ${{ secrets.LOADFOCUS_TEAM_ID }}
+    
+    - name: Run Performance Tests
+      run: |
+        loadfocus-api jmeter run-test \
+          --name "MyTestName" \
+          --thresholds "avgResponseTime<=500,errorRate<=1,p95<=750"
+
+  deploy:
+    needs: performance-test
+    runs-on: ubuntu-latest
+    environment: production
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Deploy application
+      run: echo "Deploying application..."

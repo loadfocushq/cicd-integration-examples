@@ -1,0 +1,26 @@
+image: node:16
+
+pipelines:
+  default:
+    - step:
+        name: Build and Test
+        script:
+          - npm install
+          - npm test
+    - step:
+        name: Performance Test with LoadFocus Agent
+        script:
+          # Install LoadFocus Agent CLI
+          - npm install -g @loadfocus/loadfocus-api-client
+          
+          # Configure LoadFocus Agent
+          - loadfocus-api config set --apikey $LOADFOCUS_API_KEY --teamid $LOADFOCUS_TEAM_ID
+          
+          # Run Performance Tests using the agent
+          - loadfocus-api jmeter run-test --name "MyTestName" --thresholds "avgResponseTime<=500,errorRate<=1,p95<=750"          
+    - step:
+        name: Deploy
+        deployment: production
+        trigger: manual
+        script:
+          - echo "Deploying application..."
